@@ -1,0 +1,9 @@
+services:
+  mcp-weather:
+    build: .
+    image: mcp-tw-weather
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env
+    restart: always
