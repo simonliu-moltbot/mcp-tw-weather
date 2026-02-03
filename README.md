@@ -1,62 +1,57 @@
-# Taiwan Weather & Disaster MCP Server
+# ☀️ 台灣天氣助手 (mcp-tw-weather)
 
-A Model Context Protocol (MCP) server that provides real-time weather forecasts, observations, and earthquake reports for Taiwan using the **Central Weather Administration (CWA) Open Data API**.
+這是一個基於 **FastMCP** 框架開發的 Model Context Protocol (MCP) 伺服器，支援查詢台灣即時天氣、預報以及地震資訊。
 
-## 🇹🇼 Features
-- **Forecast 36h**: General weather outlook for any city/county.
-- **Current Observation**: Real-time temperature, rain, and humidity from weather stations.
-- **Earthquakes**: Latest significant earthquake reports.
+## ✨ 特點
+- **雙傳輸模式**：同時支援 `stdio` (本機) 與 `streamable-http` (遠端/Docker) 模式。
+- **即時預報**：提供 36 小時天氣預報與降雨機率。
+- **地震警報**：同步 CWA 獲取最新顯著有感地震報告。
 
-## 🔑 Prerequisites
-You need a **CWA API Key** (Authorization Token).
-1. Register for free at [CWA Open Data Platform](https://opendata.cwa.gov.tw/user/authkey).
-2. Login and retrieve your API Key.
+---
 
-## 🛠 Installation
+## 🚀 傳輸模式 (Transport Modes)
 
-1. **Clone and Install Dependencies**:
-   ```bash
-   git clone https://github.com/your-username/mcp-tw-weather.git
-   cd mcp-tw-weather
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+### 1. 本機模式 (STDIO) - 預設
+適合與 Claude Desktop 搭配使用。
+```bash
+python src/server.py --mode stdio
+```
 
-## ⚙️ Configuration
+### 2. 遠端模式 (HTTP)
+適合 Docker 部署與遠端存取。
+```bash
+python src/server.py --mode http --port 8000
+```
+- **服務 URL**: `http://localhost:8000/mcp`
 
-### Claude Desktop
-Add to your `claude_desktop_config.json`:
+---
 
+## 🛠️ 配置
+
+需要中央氣象署 (CWA) API Key。
+```env
+CWA_API_KEY=your_api_key_here
+```
+
+---
+
+## 🔌 客戶端配置範例
+
+### Claude Desktop (STDIO)
 ```json
 {
   "mcpServers": {
     "tw-weather": {
-      "command": "/absolute/path/to/mcp-tw-weather/.venv/bin/python",
-      "args": ["/absolute/path/to/mcp-tw-weather/src/server.py"],
+      "command": "python",
+      "args": ["/絕對路徑/src/server.py", "--mode", "stdio"],
       "env": {
-        "CWA_API_KEY": "YOUR_CWA_API_KEY_HERE"
+        "CWA_API_KEY": "YOUR_KEY"
       }
     }
   }
 }
 ```
 
-### Dive
-1. Go to **Settings > Modules**.
-2. Click **Add Module**.
-3. **Type**: `stdio`
-4. **Command**: `/path/to/.venv/bin/python` (or system python if deps installed)
-5. **Args**: `/path/to/src/server.py`
-6. **Environment Variables**:
-   - Key: `CWA_API_KEY`
-   - Value: `YOUR_KEY`
-
-## 📊 Usage Examples
-- "What's the weather in Taipei?"
-- "Any rain in Kaohsi tomorrow?"
-- "Was there an earthquake just now?"
-- "Check current temperature in Banqiao."
-
-## 📜 License
-MIT
+### Dive / HTTP 客戶端
+- **Type**: `streamable`
+- **URL**: `http://localhost:8000/mcp`

@@ -1,136 +1,67 @@
+"""
+Taiwan Weather MCP Server using FastMCP.
+Supports both STDIO and Streamable HTTP transport modes.
+"""
 import sys
 import os
-import asyncio
-import traceback
+import argparse
 
 # Add current directory to path so we can import 'logic' and 'config'
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from mcp.server.fastmcp import FastMCP # Wait, prompt said NO FastMCP.
-# "Use standard mcp SDK (no fastmcp)."
-# My apologies. I must use `mcp.server.stdio.stdio_server` and `mcp.types`.
-# Let me rewrite using the low-level Server API.
+from fastmcp import FastMCP
+import logic
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
-import mcp.types as types
+# Initialize FastMCP
+mcp = FastMCP("mcp-tw-weather")
 
-# Import logic safely
-try:
-    import logic
-except ImportError:
-    sys.stderr.write("Failed to import logic.py. Ensure it is in the same directory.\n")
-    traceback.print_exc(file=sys.stderr)
-    # Define dummy logic to prevent crash
-    class DummyLogic:
-        def get_forecast_36h(self, *args, **kwargs): return "Error: logic module missing."
-        def get_current_observation(self, *args, **kwargs): return "Error: logic module missing."
-        def get_latest_earthquakes(self, *args, **kwargs): return "Error: logic module missing."
-    logic = DummyLogic()
+@mcp.tool()
+async def get_weather_forecast_36h(location_name: str = "臺北市") -> str:
+    """
+    Get the 36-hour weather forecast for a specific city in Taiwan.
+    Args:
+        location_name: City or County name in Traditional Chinese (e.g., '臺北市', '高雄市').
+    """
+    return logic.get_forecast_36h(location_name)
 
-# Initialize Server
-app = Server("mcp-tw-weather")
+@mcp.tool()
+async def get_current_observation(location_name: str) -> str:
+    """
+    Get real-time weather data (Temp, Rain, Humidity) for a specific location or station.
+    Args:
+        location_name: Station name or City name (e.g., '臺北', '板橋').
+    """
+    return logic.get_current_observation(location_name)
 
-@app.list_tools()
-async def list_tools() -> list[types.Tool]:
-    return [
-        types.Tool(
-            name="get_weather_forecast_36h",
-            description="Get the 36-hour weather forecast for a specific city in Taiwan (e.g., '臺北市', 'Kaohsiung'). Returns Temp, Rain Chance, etc.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "location_name": {
-                        "type": "string",
-                        "description": "City or County name in Traditional Chinese (e.g., '臺北市') or English (limited support)."
-                    }
-                },
-                "required": []
-            },
-        ),
-        types.Tool(
-            name="get_current_observation",
-            description="Get real-time weather data (Temp, Rain, Humidity) for a specific location or station.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "location_name": {
-                        "type": "string",
-                        "description": "Station name or City name (e.g., '臺北', '板橋')."
-                    }
-                },
-                "required": ["location_name"]
-            },
-        ),
-        types.Tool(
-            name="get_latest_earthquakes",
-            description="Get the most recent significant earthquake reports in Taiwan.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "limit": {
-                        "type": "integer",
-                        "description": "Number of reports to return (default 3).",
-                        "default": 3
-                    },
-                    "include_small": {
-                        "type": "boolean",
-                        "description": "Include small regional earthquakes (default False).",
-                        "default": False
-                    }
-                },
-            },
-        )
-    ]
+@mcp.tool()
+async def get_latest_earthquakes(limit: int = 3, include_small: bool = False) -> str:
+    """
+    Get the most recent significant earthquake reports in Taiwan.
+    Args:
+        limit: Number of reports to return (default 3).
+        include_small: Include small regional earthquakes (default False).
+    """
+    return logic.get_latest_earthquakes(limit, include_small)
 
-@app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    try:
-        if name == "get_weather_forecast_36h":
-            location = arguments.get("location_name")
-            result = logic.get_forecast_36h(location)
-            return [types.TextContent(type="text", text=result)]
-        
-        elif name == "get_current_observation":
-            location = arguments.get("location_name")
-            if not location:
-                return [types.TextContent(type="text", text="Error: location_name is required.")]
-            result = logic.get_current_observation(location)
-            return [types.TextContent(type="text", text=result)]
-            
-        elif name == "get_latest_earthquakes":
-            limit = arguments.get("limit", 3)
-            include_small = arguments.get("include_small", False)
-            result = logic.get_latest_earthquakes(limit, include_small)
-            return [types.TextContent(type="text", text=result)]
-            
-        else:
-            raise ValueError(f"Unknown tool: {name}")
+def main():
+    parser = argparse.ArgumentParser(description="Taiwan Weather MCP Server")
+    parser.add_argument("--mode", choices=["stdio", "http"], default="stdio", help="Transport mode")
+    parser.add_argument("--port", type=int, default=8000, help="HTTP port (only for http mode)")
+    args = parser.parse_args()
 
-    except Exception as e:
-        sys.stderr.write(f"Error executing tool {name}: {e}\n")
-        traceback.print_exc(file=sys.stderr)
-        return [types.TextContent(type="text", text=f"Error: {str(e)}")]
-
-async def main():
-    # Helper to check environment
     if not os.environ.get("CWA_API_KEY"):
-        sys.stderr.write("WARNING: CWA_API_KEY is not set. API calls will fail.\n")
-    
-    # Run stdio server
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            app.create_initialization_options()
+        print("WARNING: CWA_API_KEY is not set. API calls will fail.", file=sys.stderr)
+
+    if args.mode == "stdio":
+        mcp.run()
+    else:
+        print(f"Starting FastMCP in streamable-http mode on port {args.port}...", file=sys.stderr)
+        mcp.run(
+            transport="streamable-http",
+            host="0.0.0.0",
+            port=args.port,
+            path="/mcp"
         )
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        sys.stderr.write(f"Fatal server error: {e}\n")
-        traceback.print_exc(file=sys.stderr)
+    main()
